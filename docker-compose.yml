@@ -1,0 +1,88 @@
+services:
+  # postgresql container
+  postgres:
+    # postgres database used by airflow
+    image: postgres:15
+    environment:
+      postgres_user: airflow
+      postgres_password: airflow
+      postgres_db: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # airflow container for web application
+  airflow-webserver:
+    # airflow webserver for the user interface
+    image: apache/airflow:2.9.1
+    restart: always
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      # specific airflow configurations
+      airflow__core__executor: localexecutor
+      airflow__core__sql_alchemy_conn: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      # enable rbac authentication
+      airflow__webserver__rbac: 'true'
+      airflow__webserver__secret_key: 'your_secret_key_here'
+      _airflow_www_user_username: admin
+      _airflow_www_user_password: admin
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./etl:/opt/airflow/etl
+      - ./data:/opt/airflow/data
+      - ./requirements.txt:/requirements.txt
+    # installs dependencies, migrates db, creates admin user, starts webserver
+    command: >
+      bash -c "
+        pip install --no-cache-dir -r /requirements.txt &&
+        airflow db migrate &&
+        airflow users create --username admin --password admin --firstname admin --lastname admin --role admin --email admin@example.org &&
+        airflow webserver
+      "
+    ports:
+      - "8080:8080"
+
+  # airflow container for scheduler
+  airflow-scheduler:
+    # airflow scheduler that executes dags
+    image: apache/airflow:2.9.1
+    restart: always
+    depends_on:
+      - airflow-webserver
+    env_file:
+      - .env
+    environment:
+      airflow__core__executor: localexecutor
+      airflow__core__sql_alchemy_conn: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./etl:/opt/airflow/etl
+      - ./data:/opt/airflow/data
+      - ./requirements.txt:/requirements.txt
+    # migrates db and starts scheduler
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow scheduler
+      "
+
+  # streamlit container
+  streamlit-dashboard:
+    image: python:3.12-slim
+    working_dir: /dashboard
+    env_file:
+      - .env
+    volumes:
+        - ./dashboard:/dashboard
+        - ./requirements.txt:/requirements.txt
+    ports:
+        - "8501:8501"
+    command: bash -c "pip install --no-cache-dir -r /requirements.txt && streamlit run app.py --server.port=8501 --server.address=0.0.0.0"
+
+# persistent volume for the postgresql db
+volumes:
+  postgres_data:

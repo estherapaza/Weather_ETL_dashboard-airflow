@@ -70,14 +70,11 @@ def run_transform():
 def run_load():
     load_data_to_postgres()  # funzione che legge i csv e li carica nel DB
 
-
-# Orario schedule di default
 load_dotenv()
 
 TIMEZONE = os.getenv("TIMEZONE", "Europe/Rome")
 SCHEDULE = os.getenv("SCHEDULE", "0 0 * * *")  # default ogni giorno a mezzanotte
 
-# Variabile personalizzabile
 local_tz = pendulum.timezone(TIMEZONE)
 
 with DAG(
